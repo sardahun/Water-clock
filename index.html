@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>자격루 3D 시뮬레이션</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #ff7e5f; font-family: 'Pretendard', sans-serif; }
+        canvas { display: block; }
+        
+        /* UI 레이아웃 */
+        #ui-panel {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 50px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            border: 2px solid rgba(255,255,255,0.4);
+        }
+
+        #time-slider {
+            flex-grow: 1;
+            cursor: pointer;
+            accent-color: #ff4e50; /* 포스터 물감 느낌의 강렬한 레드 */
+        }
+
+        .label { color: white; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            pointer-events: none;
+        }
+        h1 { margin: 0; font-size: 24px; color: #fee140; }
+        #current-time { font-size: 18px; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+<div id="info">
+    <h1>自擊漏 : 자격루 3D 시뮬레이션</h1>
+    <p>마우스로 회전/확대 가능 | 슬라이더로 시간 조절</p>
+    <div id="current-time">오전 00:00</div>
+</div>
+
+<div id="ui-panel">
+    <span class="label">새벽</span>
+    <input type="range" id="time-slider" min="0" max="1440" value="720">
+    <span class="label">자정</span>
+</div>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // 1. 기본 씬 설정
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#ff9a9e'); 
+    scene.fog = new THREE.FogExp2('#ff9a9e', 0.02); 
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(10, 8, 15);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true; 
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 부드러운 그림자
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // 2. 조명 (해의 움직임 재현용)
+    const sunLight = new THREE.DirectionalLight(0xffffee, 2); // 밝기 증가
+    sunLight.position.set(10, 20, 10);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 1024;
+    sunLight.shadow.mapSize.height = 1024;
+    sunLight.shadow.camera.near = 0.5;
+    sunLight.shadow.camera.far = 50;
+    sunLight.shadow.camera.left = -20;
+    sunLight.shadow.camera.right = 20;
+    sunLight.shadow.camera.top = 20;
+    sunLight.shadow.camera.bottom = -20;
+    scene.add(sunLight);
+
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.8); // 앰비언트 라이트 추가
+    scene.add(ambientLight);
+
+    // 3. 자격루 주요 구성 요소 (포스터 스타일 매트 재질)
+    // 재질 정의 (고채도, 무광택)
+    const material_vessel = new THREE.MeshStandardMaterial({ color: '#2ecc71', roughness: 0.7, metalness: 0.1 }); // 연한 초록
+    const material_wood = new THREE.MeshStandardMaterial({ color: '#e67e22', roughness: 0.7, metalness: 0.1 }); // 주황색 나무
+    const material_metal = new THREE.MeshStandardMaterial({ color: '#f1c40f', roughness: 0.3, metalness: 0.7 }); // 황금색 금속
+    const material_water = new THREE.MeshStandardMaterial({ color: '#3498db', transparent: true, opacity: 0.7 }); // 투명한 물
+
+    // 자격루 그룹 생성
+    const jagyeongnuGroup = new THREE.Group();
+    scene.add(jagyeongnuGroup);
+
+    // 3-1. 파수호 (물 공급 항아리) - 가장 높은 곳
+    const pasuho = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 3, 32), material_vessel);
+    pasuho.position.set(0, 6, 0);
+    jagyeongnuGroup.add(pasuho);
+
+    // 3-2. 수수호 (물 받는 항아리) - 중간 높이
+    const susoho = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.5, 2.5, 32), material_vessel);
+    susoho.position.set(0, 3, 0);
+    jagyeongnuGroup.add(susoho);
+
+    // 3-3. 부표 (수위 측정)
+    const buoy = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.5, 16), material_wood);
+    buoy.position.set(0, 3.5, 0); // 초기 위치
+    jagyeongnuGroup.add(buoy);
+
+    // 3-4. 잣대 (시간 눈금자)
+    const ruler = new THREE.Mesh(new THREE.BoxGeometry(0.5, 4, 0.2), material_wood);
+    ruler.position.set(1.5, 3, 0);
+    jagyeongnuGroup.add(ruler);
+
+    // 3-5. 물길 (파수호 -> 수수호)
+    const waterPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3, 16), material_metal);
+    waterPipe.rotation.z = Math.PI / 2;
+    waterPipe.position.set(0, 4.5, 1.5); // 옆으로 기울어진 파이프
+    jagyeongnuGroup.add(waterPipe);
+
+    // 3-6. 방목 (쇠구슬이 굴러가는 통로)
+    const trackWidth = 0.5;
+    const trackHeight = 0.3;
+    const trackDepth = 4;
+    const track = new THREE.Mesh(new THREE.BoxGeometry(trackWidth, trackHeight, trackDepth), material_wood);
+    track.position.set(3, 1.5, 0);
+    jagyeongnuGroup.add(track);
+
+    // 3-7. 주전 (지렛대)
+    const lever = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 2), material_wood);
+    lever.position.set(3, 1.2, -1.5);
+    lever.rotation.x = Math.PI / 4; // 약간 기울어짐
+    jagyeongnuGroup.add(lever);
+
+    // 3-8. 쇠구슬
+    const metalBall = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), material_metal);
+    metalBall.position.set(3, 1.8, 1.5); // 초기 위치
+    metalBall.castShadow = true;
+    jagyeongnuGroup.add(metalBall);
+
+    // 3-9. 타종 인형 (시간을 알리는 인형)
+    const bellman = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.5, 16), material_wood);
+    bellman.position.set(5, 0.75, 0);
+    jagyeongnuGroup.add(bellman);
+
+    // 3-10. 징 (타종 장치)
+    const gong = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.2, 32), material_metal);
+    gong.position.set(6.5, 1.2, 0);
+    jagyeongnuGroup.add(gong);
+
+    // 4. 바닥 (조선시대 평소 모습 대용)
+    const floorGeo = new THREE.PlaneGeometry(100, 100);
+    const floorMat = new THREE.MeshStandardMaterial({ 
+        color: '#c8d6e5', // 밝은 회색 계열 (조선시대 흙바닥 느낌)
+        roughness: 0.9, 
+        metalness: 0.0 
+    });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -1;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // 5. 인터랙션: 시간 슬라이더 조절
+    const slider = document.getElementById('time-slider');
+    const currentTimeDisplay = document.getElementById('current-time');
+    let isEventActive = false; // 이벤트 중복 방지
+
+    slider.addEventListener('input', (e) => {
+        if (isEventActive) return;
+
+        const val = parseInt(e.target.value); // 0 ~ 1440 (분 단위)
+        const hour = Math.floor(val / 60);
+        const minute = val % 60;
+
+        // 시간 표시 업데이트
+        currentTimeDisplay.textContent = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        
+        // 하늘 색상 변화 (낮/밤) - 포스터 컬러 톤 유지
+        const progress = val / 1440; // 0 ~ 1
+        let hue, saturation, lightness;
+
+        if (progress < 0.25) { // 새벽 (00:00 ~ 06:00)
+            hue = THREE.MathUtils.lerp(0.65, 0.7, progress * 4); // 푸른 보라
+            saturation = 0.8;
+            lightness = THREE.MathUtils.lerp(0.1, 0.3, progress * 4);
+        } else if (progress < 0.5) { // 아침 (06:00 ~ 12:00)
+            hue = THREE.MathUtils.lerp(0.7, 0.1, (progress - 0.25) * 4); // 보라 -> 주황
+            saturation = THREE.MathUtils.lerp(0.8, 0.9, (progress - 0.25) * 4);
+            lightness = THREE.MathUtils.lerp(0.3, 0.7, (progress - 0.25) * 4);
+        } else if (progress < 0.75) { // 낮 (12:00 ~ 18:00)
+            hue = THREE.MathUtils.lerp(0.1, 0.05, (progress - 0.5) * 4); // 주황 -> 붉은 주황
+            saturation = 0.9;
+            lightness = THREE.MathUtils.lerp(0.7, 0.6, (progress - 0.5) * 4);
+        } else { // 저녁 ~ 밤 (18:00 ~ 24:00)
+            hue = THREE.MathUtils.lerp(0.05, 0.65, (progress - 0.75) * 4); // 붉은 주황 -> 푸른 보라
+            saturation = THREE.MathUtils.lerp(0.9, 0.8, (progress - 0.75) * 4);
+            lightness = THREE.MathUtils.lerp(0.6, 0.1, (progress - 0.75) * 4);
+        }
+        
+        scene.background.setHSL(hue, saturation, lightness);
+        scene.fog.color.setHSL(hue, saturation, lightness);
+        
+        // 해의 위치(그림자) 변화
+        const angle = (val / 1440) * Math.PI * 2 - Math.PI / 2; // 00시 -> 24시까지 한 바퀴 (시작점 조정)
+        sunLight.position.x = Math.cos(angle) * 20;
+        sunLight.position.y = Math.sin(angle) * 20; // 0~12시까지는 위로, 12~24시는 아래로
+        sunLight.position.z = Math.cos(angle / 2) * 10; // 해가 약간 좌우로 움직이는 느낌
+        
+        // 부표의 높이 조절 (물의 양)
+        // 예를 들어 12시간마다 물이 가득 차고 비워진다고 가정
+        const waterLevelProgress = (val % 720) / 720; // 12시간 주기
+        buoy.position.y = THREE.MathUtils.lerp(3.5, 4.5, waterLevelProgress); // 수수호 내에서 움직임
+
+        // 징이 울리는 시간 (예: 오전 06시, 오후 12시, 오후 06시, 자정)
+        // 슬라이더 값이 해당 시각에 도달하면 이벤트 트리거
+        if (!isEventActive && (val === 360 || val === 720 || val === 1080 || val === 0)) { // 06:00, 12:00, 18:00, 24:00
+            triggerBellEvent();
+        }
+    });
+
+    // 6. 쇠구슬 시점 이벤트 애니메이션
+    async function triggerBellEvent() {
+        isEventActive = true; // 이벤트 시작
+        const originalCameraPosition = camera.position.clone();
+        const originalControlsTarget = controls.target.clone();
+
+        // 1. 쇠구슬 시작 위치로 카메라 이동
+        await animateCameraTo(metalBall.position.clone().add(new THREE.Vector3(0, 0.5, 2)), metalBall.position.clone()); // 쇠구슬 뒤에서 응시
+
+        // 2. 쇠구슬 굴러가는 애니메이션
+        const startPos = metalBall.position.clone();
+        const endPos = new THREE.Vector3(3, 1.8, -1.5); // 레버 쪽 끝
+
+        await animateObject(metalBall, endPos, 1000); // 1초간 굴러감
+
+        // 3. 레버 작동 클로즈업
+        await animateCameraTo(lever.position.clone().add(new THREE.Vector3(0, 0.5, 2)), lever.position.clone());
+        await animateLever(lever, 500); // 0.5초간 레버 움직임
+
+        // 4. 타종 인형 작동 및 징 소리
+        await animateCameraTo(bellman.position.clone().add(new THREE.Vector3(0, 1, 2)), bellman.position.clone());
+        await animateBellman(bellman, gong, 700); // 0.7초간 인형이 징을 침
+
+        // 5. 원거리 카메라 시점으로 복귀
+        await animateCameraTo(originalCameraPosition, originalControlsTarget);
+        
+        isEventActive = false; // 이벤트 종료
+    }
+
+    // 카메라 애니메이션 헬퍼 (Promise 기반)
+    function animateCameraTo(targetPosition, targetLookAt, duration = 1500) {
+        return new Promise(resolve => {
+            const startPos = camera.position.clone();
+            const startTarget = controls.target.clone();
+            const startTime = Date.now();
+
+            function animateCam() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                camera.position.lerpVectors(startPos, targetPosition, progress);
+                controls.target.lerpVectors(startTarget, targetLookAt, progress);
+                controls.update();
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateCam);
+                } else {
+                    resolve();
+                }
+            }
+            animateCam();
+        });
+    }
+
+    // 오브젝트 이동 애니메이션 헬퍼
+    function animateObject(object, targetPosition, duration) {
+        return new Promise(resolve => {
+            const startPos = object.position.clone();
+            const startTime = Date.now();
+
+            function animateObj() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                object.position.lerpVectors(startPos, targetPosition, progress);
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateObj);
+                } else {
+                    resolve();
+                }
+            }
+            animateObj();
+        });
+    }
+    
+    // 레버 애니메이션 헬퍼
+    function animateLever(leverMesh, duration) {
+        return new Promise(resolve => {
+            const initialRotation = leverMesh.rotation.x;
+            const targetRotation = initialRotation - Math.PI / 8; // 살짝 내려감
+            const startTime = Date.now();
+
+            function animateLev() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                leverMesh.rotation.x = THREE.MathUtils.lerp(initialRotation, targetRotation, progress);
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateLev);
+                } else {
+                    leverMesh.rotation.x = initialRotation; // 원위치
+                    resolve();
+                }
+            }
+            animateLev();
+        });
+    }
+
+    // 인형 타종 애니메이션 헬퍼
+    function animateBellman(bellmanMesh, gongMesh, duration) {
+        return new Promise(resolve => {
+            const initialRotation = bellmanMesh.rotation.y;
+            const startTime = Date.now();
+
+            function animateBell() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // 인형이 징을 치는 동작
+                if (progress < 0.5) { // 스윙 백
+                    bellmanMesh.rotation.y = THREE.MathUtils.lerp(initialRotation, initialRotation + Math.PI / 4, progress * 2);
+                } else { // 스윙 포워드 (징 침)
+                    bellmanMesh.rotation.y = THREE.MathUtils.lerp(initialRotation + Math.PI / 4, initialRotation - Math.PI / 8, (progress - 0.5) * 2);
+                }
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateBell);
+                } else {
+                    bellmanMesh.rotation.y = initialRotation; // 원위치
+                    resolve();
+                }
+            }
+            animateBell();
+        });
+    }
+
+
+    // 루프 애니메이션
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    // 리사이즈 대응
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+</script>
+</body>
+</html>
