@@ -2,33 +2,35 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>자격루 원리 시뮬레이션</title>
+    <title>조선의 AI 자격루 - 물리 시뮬레이션</title>
     <style>
         body { margin: 0; overflow: hidden; background: #1a1a2e; font-family: 'Pretendard', sans-serif; }
         #ui-panel {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            width: 80%; background: rgba(0,0,0,0.7); backdrop-filter: blur(10px);
-            padding: 20px; border-radius: 40px; display: flex; align-items: center; gap: 20px;
+            width: 85%; background: rgba(0,0,0,0.8); backdrop-filter: blur(15px);
+            padding: 25px; border-radius: 50px; display: flex; align-items: center; gap: 20px;
             border: 1px solid #444; z-index: 100;
         }
-        #time-slider { flex-grow: 1; accent-color: #ff4757; }
-        .label { color: #fff; font-weight: bold; min-width: 60px; }
-        #info { position: absolute; top: 20px; left: 20px; color: white; z-index: 100; }
-        #log { position: absolute; top: 20px; right: 20px; color: #00ffcc; font-family: monospace; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; }
+        #time-slider { flex-grow: 1; accent-color: #ff4757; cursor: pointer; }
+        .label { color: #fff; font-weight: bold; min-width: 80px; text-align: center; }
+        #info { position: absolute; top: 25px; left: 25px; color: white; z-index: 100; pointer-events: none; }
+        #status-log { position: absolute; top: 25px; right: 25px; color: #00ffcc; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 10px; font-size: 14px; border: 1px solid #00ffcc; }
+        h1 { margin: 0; color: #ffd32a; font-size: 28px; }
+        canvas { display: block; }
     </style>
 </head>
 <body>
 
 <div id="info">
-    <h1 style="margin:0; color:#fee140;">자격루(自擊漏) 원리 가동</h1>
-    <p>슬라이더를 밀어 물을 채우세요. 수위가 차오르면 쇠구슬이 발사됩니다.</p>
+    <h1>自擊漏 : 정교한 물리 시뮬레이션</h1>
+    <p>슬라이더를 밀어 수위가 높아지면 잣대가 구슬을 밀어냅니다.</p>
 </div>
-<div id="log">상태: 대기 중</div>
+<div id="status-log">상태: 용기(항아리) 대기 중</div>
 
 <div id="ui-panel">
-    <span class="label">수위 조절</span>
-    <input type="range" id="time-slider" min="0" max="100" value="0">
-    <span class="label">자동 보정</span>
+    <span class="label">수위(水)</span>
+    <input type="range" id="time-slider" min="0" max="1000" value="0">
+    <span class="label">임계점 접근</span>
 </div>
 
 <script type="importmap">
@@ -44,11 +46,13 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    // 1. 기초 세팅
+    // 1. 기초 환경 세팅
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#1e272e');
-    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(12, 10, 15);
+    scene.background = new THREE.Color('#2c3e50');
+    scene.fog = new THREE.FogExp2('#2c3e50', 0.015);
+
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(18, 14, 22);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -56,121 +60,143 @@
     document.body.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    
+    controls.enableDamping = true;
+
     // 조명
-    const light = new THREE.DirectionalLight(0xffffff, 2);
-    light.position.set(5, 15, 10);
-    light.castShadow = true;
-    scene.add(light, new THREE.AmbientLight(0xffffff, 0.5));
+    const sun = new THREE.DirectionalLight(0xffffff, 2);
+    sun.position.set(10, 20, 15);
+    sun.castShadow = true;
+    scene.add(sun, new THREE.AmbientLight(0xffffff, 0.5));
 
-    // 2. 자격루 구조물 (받침대 및 항아리)
-    const woodMat = new THREE.MeshStandardMaterial({ color: '#5d4037' });
-    const bronzeMat = new THREE.MeshStandardMaterial({ color: '#cd7f32', metalness: 0.7, roughness: 0.3 });
-    const waterMat = new THREE.MeshStandardMaterial({ color: '#00d2ff', transparent: true, opacity: 0.7 });
-    const goldMat = new THREE.MeshStandardMaterial({ color: '#ffd700', metalness: 0.9 });
+    // 2. 재질 (포스터 컬러 스타일)
+    const matWood = new THREE.MeshStandardMaterial({ color: '#5d4037', roughness: 0.9 });
+    const matRedWood = new THREE.MeshStandardMaterial({ color: '#c0392b' });
+    const matBronze = new THREE.MeshStandardMaterial({ color: '#b7950b', metalness: 0.6, roughness: 0.3 });
+    const matWater = new THREE.MeshStandardMaterial({ color: '#3498db', transparent: true, opacity: 0.7 });
+    const matGold = new THREE.MeshStandardMaterial({ color: '#f1c40f', metalness: 0.9 });
 
-    // 받침대 (가구)
-    const base = new THREE.Mesh(new THREE.BoxGeometry(10, 1, 6), woodMat);
-    base.position.y = -0.5;
-    scene.add(base);
+    // 3. 자격루 가구 (누기) - 정교한 받침대
+    const baseGroup = new THREE.Group();
+    const createCabinet = (w, h, d, x, y, z) => {
+        const geo = new THREE.BoxGeometry(w, h, d);
+        const mesh = new THREE.Mesh(geo, matRedWood);
+        mesh.position.set(x, y + h/2, z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        baseGroup.add(mesh);
+    };
+    createCabinet(18, 1, 8, 0, 0, 0); // 메인 바닥
+    createCabinet(4, 8, 4, -6, 1, 0); // 대파구 받침
+    createCabinet(4, 5, 4, -1, 1, 0); // 소파구 받침
+    createCabinet(6, 12, 6, 6, 1, 0); // 시보 장치실(방목실)
+    scene.add(baseGroup);
 
-    // 수수호 (물을 받는 통)
-    const susuho = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 6, 32), bronzeMat);
-    susuho.position.set(0, 3, 0);
-    scene.add(susuho);
+    // 4. 항아리 및 물 로직
+    const pots = [];
+    const createPot = (r, h, x, y, z) => {
+        const pot = new THREE.Mesh(new THREE.CylinderGeometry(r, r*1.1, h, 32), matBronze);
+        pot.position.set(x, y + h/2, z);
+        scene.add(pot);
 
-    // [물 객체] - 실제 수위가 변하는 메쉬
-    const waterLevelMesh = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 1, 32), waterMat);
-    waterLevelMesh.position.set(0, 0.5, 0);
-    scene.add(waterLevelMesh);
+        const water = new THREE.Mesh(new THREE.CylinderGeometry(r*0.9, r*0.9, h, 32), matWater);
+        water.position.copy(pot.position);
+        water.scale.set(1, 0.01, 1);
+        scene.add(water);
+        return { pot, water, h };
+    };
 
-    // [부표 및 잣대] - 물 위에 뜨는 장치
+    const bigPot = createPot(1.5, 3, -6, 9, 0); // 파수호
+    const smallPot = createPot(1.2, 2.5, -1, 6, 0); // 수수호
+
+    // 수수호 내부 부표(Buoy)와 잣대
     const buoyGroup = new THREE.Group();
-    const buoy = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.2, 32), woodMat);
-    const rod = new THREE.Mesh(new THREE.BoxGeometry(0.2, 8, 0.2), goldMat); // 잣대
-    rod.position.y = 4;
+    const buoy = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.3, 32), matWood);
+    const rod = new THREE.Mesh(new THREE.BoxGeometry(0.2, 10, 0.2), matGold);
+    rod.position.y = 5;
     buoyGroup.add(buoy, rod);
-    buoyGroup.position.y = 0.5;
+    buoyGroup.position.set(-1, 6.2, 0);
     scene.add(buoyGroup);
 
-    // [방목] - 구슬이 굴러갈 통로
-    const track = new THREE.Mesh(new THREE.BoxGeometry(8, 0.4, 0.6), woodMat);
-    track.position.set(4, 5.5, 0);
-    scene.add(track);
+    // 5. 시보 시스템 (종, 북, 징 및 인형)
+    const instruments = [];
+    const createOrchestra = (name, x, z, color) => {
+        const group = new THREE.Group();
+        // 인형
+        const doll = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 1.2), new THREE.MeshStandardMaterial({color: '#2980b9'}));
+        doll.position.y = 0.6;
+        // 악기
+        let inst;
+        if(name === '종') inst = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 1), matBronze);
+        if(name === '북') inst = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 1.2), new THREE.MeshStandardMaterial({color: '#d35400'}));
+        if(name === '징') inst = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.1), matBronze);
+        inst.position.set(1, 1, 0);
+        if(name === '북') inst.rotation.z = Math.PI/2;
+        
+        group.add(doll, inst);
+        group.position.set(x, 13, z);
+        scene.add(group);
+        return { group, doll, name };
+    };
 
-    // [쇠구슬]
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), goldMat);
-    ball.position.set(1, 5.8, 0); // 잣대 끝에 걸려있는 상태
+    const bell = createOrchestra('종', 4, -2, '#f1c40f');
+    const drum = createOrchestra('북', 4, 0, '#e67e22');
+    const gong = createOrchestra('징', 4, 2, '#d35400');
+
+    // 6. 쇠구슬 물리
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), matGold);
+    ball.position.set(-0.5, 12, 0); // 잣대 위에 대기
     scene.add(ball);
 
-    // 3. 시뮬레이션 로직
+    // 7. 인터랙션 및 시뮬레이션 루프
     const slider = document.getElementById('time-slider');
-    const log = document.getElementById('log');
-    
-    let isRolling = false;
+    const log = document.getElementById('status-log');
+    let isTriggered = false;
 
     slider.addEventListener('input', (e) => {
-        if (isRolling) return; // 공이 구르는 중에는 입력 차단
-
-        const level = e.target.value / 10; // 0 ~ 10 단위
+        const val = e.target.value / 1000;
         
-        // 1. 물이 차오름
-        waterLevelMesh.scale.y = level;
-        waterLevelMesh.position.y = (level / 2);
+        // 물 차오르는 구조 구현
+        smallPot.water.scale.y = val;
+        smallPot.water.position.y = 6 + (val * smallPot.h / 2);
+        
+        // 부표가 물을 따라 물리적으로 상승
+        buoyGroup.position.y = 6.2 + (val * smallPot.h);
 
-        // 2. 부표가 물을 따라 올라감
-        buoyGroup.position.y = level;
-
-        // 3. 잣대가 공을 건드리는 시점 확인 (수위가 80% 이상일 때)
-        if (level >= 5.5) {
-            triggerBall();
-        } else {
-            ball.position.set(1, 5.8, 0); // 복귀
-            log.innerText = "상태: 물이 차오르는 중...";
-            log.style.color = "#00ffcc";
+        // 잣대가 일정 높이에 도달하면 구슬 방출
+        if (val > 0.8 && !isTriggered) {
+            runSequence();
         }
     });
 
-    function triggerBall() {
-        if (isRolling) return;
-        isRolling = true;
-        log.innerText = "상태: 임계점 도달! 구슬 방출!";
-        log.style.color = "#ff4757";
-
-        // 구슬 굴러가기 애니메이션 (단순화)
-        let speed = 0;
-        const rollInterval = setInterval(() => {
-            speed += 0.05;
-            ball.position.x += speed;
-            
-            // 카메라가 구슬을 따라가도록 설정 (사용자 요청 반영)
+    async function runSequence() {
+        isTriggered = true;
+        log.innerText = "상태: 잣대가 구슬을 밀어냈습니다!";
+        
+        // 1. 구슬이 굴러감 (카메라 추적)
+        const startX = ball.position.x;
+        for(let i=0; i<50; i++) {
+            ball.position.x += 0.1;
             camera.lookAt(ball.position);
+            await new Promise(r => setTimeout(r, 20));
+        }
 
-            if (ball.position.x > 8) {
-                clearInterval(rollInterval);
-                log.innerText = "상태: 징~ 시보 완료!";
-                setTimeout(() => {
-                    isRolling = false;
-                    resetSystem();
-                }, 2000);
-            }
-        }, 30);
+        // 2. 인형의 타종 애니메이션
+        log.innerText = "상태: 종, 북, 징이 울립니다! (시보 중)";
+        bell.doll.rotation.z = 0.5; // 인형이 숙이는 동작
+        await new Promise(r => setTimeout(r, 500));
+        bell.doll.rotation.z = 0;
+
+        // 3. 리셋
+        setTimeout(() => {
+            isTriggered = false;
+            ball.position.set(-0.5, 12, 0);
+            log.innerText = "상태: 다음 시보를 위해 대기 중";
+        }, 2000);
     }
 
-    function resetSystem() {
-        slider.value = 0;
-        waterLevelMesh.scale.y = 0.1;
-        waterLevelMesh.position.y = 0.05;
-        buoyGroup.position.y = 0;
-        ball.position.set(1, 5.8, 0);
-        camera.position.set(12, 10, 15);
-        camera.lookAt(0, 3, 0);
-        log.innerText = "상태: 대기 중";
-    }
-
-    // 4. 루프
     function animate() {
         requestAnimationFrame(animate);
+        controls.update();
         renderer.render(scene, camera);
     }
     animate();
@@ -180,7 +206,6 @@
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
-
 </script>
 </body>
 </html>
