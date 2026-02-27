@@ -2,34 +2,34 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>조선의 AI, 자격루 3D 시뮬레이션</title>
+    <title>장영실의 자격루 3D 시뮬레이션</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #1a1a2e; font-family: 'Pretendard', sans-serif; }
+        body { margin: 0; overflow: hidden; background: #0f172a; font-family: 'Pretendard', sans-serif; }
         #ui-panel {
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            width: 80%; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(15px);
-            padding: 20px; border-radius: 50px; display: flex; align-items: center; gap: 20px;
-            border: 1px solid rgba(255,255,255,0.2); z-index: 100;
+            width: 85%; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px);
+            padding: 25px; border-radius: 60px; display: flex; align-items: center; gap: 20px;
+            border: 1px solid rgba(255,255,255,0.2); z-index: 100; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
-        #time-slider { flex-grow: 1; accent-color: #e67e22; }
-        .label { color: #ddd; font-size: 14px; font-weight: bold; min-width: 50px; }
-        #info { position: absolute; top: 20px; left: 20px; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); z-index: 100; }
-        #current-time { font-size: 32px; font-weight: 800; color: #fee140; margin-top: 5px; }
+        #time-slider { flex-grow: 1; accent-color: #ff4757; cursor: pointer; }
+        .label { color: #fff; font-size: 14px; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        #info { position: absolute; top: 30px; left: 30px; color: white; z-index: 100; }
+        #current-time { font-size: 42px; font-weight: 900; color: #ffd32a; margin-top: 5px; letter-spacing: -1px; }
         canvas { display: block; }
     </style>
 </head>
 <body>
 
 <div id="info">
-    <div style="color: #e67e22; font-weight: bold; letter-spacing: 2px;">JAGEOKRU SIMULATION</div>
-    <h1>국보 제229호 자격루</h1>
+    <div style="background: #ff4757; display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-bottom: 8px;">조선의 자동 물시계</div>
+    <h1>自擊漏 : 자격루</h1>
     <div id="current-time">12:00</div>
 </div>
 
 <div id="ui-panel">
-    <span class="label">묘시(晨)</span>
-    <input type="range" id="time-slider" min="0" max="1440" value="720">
-    <span class="label">인시(夜)</span>
+    <span class="label">새벽(寅)</span>
+    <input type="range" id="time-slider" min="0" max="1439" value="720">
+    <span class="label">자정(子)</span>
 </div>
 
 <script type="importmap">
@@ -45,152 +45,173 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    // 1. 기본 세팅
+    // 1. Scene & Camera
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#34495e');
-    scene.fog = new THREE.FogExp2('#34495e', 0.015); // 배경 블러 효과
+    scene.background = new THREE.Color('#2f3542');
+    scene.fog = new THREE.FogExp2('#2f3542', 0.012);
 
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(15, 12, 20);
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(18, 12, 22);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
-    renderer.toneMapping = THREE.ReinhardToneMapping;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
-    // 2. 조명 (태양)
-    const sunLight = new THREE.DirectionalLight(0xffffff, 2);
+    // 2. 조명 (그림자 강조)
+    const sunLight = new THREE.DirectionalLight(0xffffff, 2.5);
+    sunLight.position.set(10, 25, 15);
     sunLight.castShadow = true;
+    sunLight.shadow.mapSize.set(2048, 2048);
     scene.add(sunLight);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
-    // 3. 조선 시대 배경 (마을 형상화)
-    function createVillage() {
-        const village = new THREE.Group();
-        const houseGeo = new THREE.BoxGeometry(2, 1, 1.5);
-        const roofGeo = new THREE.ConeGeometry(1.5, 1, 4);
-        const houseMat = new THREE.MeshStandardMaterial({ color: '#d1ccc0' });
-        const roofMat = new THREE.MeshStandardMaterial({ color: '#2c3e50' });
+    // 3. 재질 정의 (포스터 물감 스타일 고채도)
+    const matWood = new THREE.MeshStandardMaterial({ color: '#7b241c', roughness: 0.8 }); // 짙은 붉은 가구색
+    const matBronze = new THREE.MeshStandardMaterial({ color: '#b7950b', metalness: 0.7, roughness: 0.3 }); // 청동 항아리
+    const matWater = new THREE.MeshStandardMaterial({ color: '#0984e3', transparent: true, opacity: 0.8 }); // 선명한 파란 물
+    const matDoll = new THREE.MeshStandardMaterial({ color: '#eb4d4b' }); // 인형 옷(적색)
 
-        for(let i=0; i<30; i++) {
-            const h = new THREE.Mesh(houseGeo, houseMat);
-            const r = new THREE.Mesh(roofGeo, roofMat);
-            const x = (Math.random() - 0.5) * 80;
-            const z = (Math.random() - 0.5) * 80;
-            if (Math.abs(x) < 15 && Math.abs(z) < 15) continue; // 자격루 주변 비우기
-            h.position.set(x, 0.5, z);
-            r.position.set(x, 1.5, z);
-            r.rotation.y = Math.PI / 4;
-            village.add(h, r);
-        }
-        scene.add(village);
-    }
-    createVillage();
+    // 4. 자격루 가구(받침대) 구조
+    const group = new THREE.Group();
 
-    // 4. 자격루 본체 (디테일 업)
-    const jagyeongnu = new THREE.Group();
-    
-    // 재질 (포스터 물감 스타일 고채도)
-    const matBronze = new THREE.MeshStandardMaterial({ color: '#cd7f32', metalness: 0.8, roughness: 0.2 }); // 청동 항아리
-    const matDeepGreen = new THREE.MeshStandardMaterial({ color: '#16a085', roughness: 0.5 });
-    const matRedWood = new THREE.MeshStandardMaterial({ color: '#c0392b' }); // 화려한 붉은 나무 기둥
-    const matGold = new THREE.MeshStandardMaterial({ color: '#f1c40f', metalness: 1, roughness: 0.1 });
-
-    // 파수호(항아리) 3개 세트
-    const pots = [
-        { r: 2, h: 3, y: 8, x: -4 },
-        { r: 1.5, h: 2.5, y: 5, x: -2 },
-        { r: 1.2, h: 2, y: 2, x: 0 }
-    ];
-    pots.forEach(p => {
-        const mesh = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r*1.1, p.h, 32), matBronze);
-        mesh.position.set(p.x, p.y, 0);
-        jagyeongnu.add(mesh);
-    });
-
-    // 수수호 (긴 사각형 통)
-    const susuho = new THREE.Mesh(new THREE.BoxGeometry(2, 6, 2), matBronze);
-    susuho.position.set(3, 3, 0);
-    jagyeongnu.add(susuho);
-
-    // 시보 장치 (종, 북, 징)
-    const createInstrument = (type, x, y, z, color) => {
-        const group = new THREE.Group();
-        const frame = new THREE.Mesh(new THREE.BoxGeometry(0.2, 5, 0.2), matRedWood);
-        const top = new THREE.Mesh(new THREE.BoxGeometry(2, 0.2, 0.2), matRedWood);
-        frame.position.set(0, 2.5, 0);
-        top.position.set(0, 5, 0);
-        
-        let target;
-        if(type === '종') target = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.8, 1.2, 20), new THREE.MeshStandardMaterial({color: color, metalness: 0.9}));
-        if(type === '북') target = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1.5, 20), new THREE.MeshStandardMaterial({color: color}));
-        if(type === '징') target = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.1, 32), new THREE.MeshStandardMaterial({color: color, metalness: 1}));
-        
-        target.position.set(0, 3.5, 0);
-        if(type === '북') target.rotation.z = Math.PI/2;
-        
-        group.add(frame, top, target);
-        group.position.set(x, y, z);
-        return { group, target };
+    const createSupport = (w, h, d, x, y, z) => {
+        const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matWood);
+        box.position.set(x, y + h/2, z);
+        box.castShadow = true;
+        box.receiveShadow = true;
+        group.add(box);
     };
 
-    const bell = createInstrument('종', 7, 0, -2, '#f1c40f'); // 종 (시)
-    const drum = createInstrument('북', 7, 0, 0, '#e67e22');  // 북 (경)
-    const gong = createInstrument('징', 7, 0, 2, '#d35400');  // 징 (점)
-    jagyeongnu.add(bell.group, drum.group, gong.group);
+    // 메인 가구 선반 (계단식 구조)
+    createSupport(4, 8, 4, -6, 0, 0);   // 파수호(대) 받침
+    createSupport(4, 5, 4, -2, 0, 0);   // 파수호(중) 받침
+    createSupport(4, 2, 4, 2, 0, 0);    // 파수호(소) 받침
+    createSupport(6, 0.5, 6, 6, 0, 0);  // 수수호 & 인형 하단판
 
-    // 쇠구슬 (주전)
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), matGold);
-    ball.position.set(4, 5, 0);
-    jagyeongnu.add(ball);
+    // 5. 항아리 및 물줄기
+    const pots = [];
+    const createPot = (r, h, x, y, z) => {
+        const pot = new THREE.Mesh(new THREE.CylinderGeometry(r, r*1.2, h, 32), matBronze);
+        pot.position.set(x, y + h/2, z);
+        pot.castShadow = true;
+        group.add(pot);
+        
+        // 항아리 속 물
+        const water = new THREE.Mesh(new THREE.CylinderGeometry(r*0.9, r*0.9, h*0.8, 32), matWater);
+        water.position.copy(pot.position);
+        water.scale.y = 0.5; // 시간에 따라 변할 예정
+        group.add(water);
+        
+        // 흐르는 물줄기 (다음 항아리로)
+        const stream = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 4, 8), matWater);
+        stream.rotation.z = Math.PI / 3;
+        stream.position.set(x + 1.5, y + h, z);
+        group.add(stream);
+        
+        return { pot, water, stream };
+    };
 
-    scene.add(jagyeongnu);
+    const p1 = createPot(1.5, 3, -6, 8, 0);
+    const p2 = createPot(1.2, 2.5, -2, 5, 0);
+    const p3 = createPot(1, 2, 2, 2, 0);
+    
+    // 수수호 (물을 받는 긴 사각형 기둥)
+    const susuho = new THREE.Mesh(new THREE.BoxGeometry(2, 7, 2), matBronze);
+    susuho.position.set(6, 3.5, 0);
+    group.add(susuho);
+
+    // 6. 인형 및 타종 장치 (종, 북, 징)
+    const createDollWithInstrument = (name, x, z, instColor) => {
+        const dollGroup = new THREE.Group();
+        // 몸통
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 1.5), matDoll);
+        body.position.y = 1;
+        // 머리(사모 관대)
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), new THREE.MeshStandardMaterial({color: 0x000000}));
+        head.position.y = 2;
+        
+        // 악기
+        let inst;
+        if(name === '종') inst = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 1), matBronze);
+        if(name === '북') inst = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 1.2), new THREE.MeshStandardMaterial({color: '#f0932b'}));
+        if(name === '징') inst = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.15), matBronze);
+        
+        inst.position.set(1.2, 1.5, 0);
+        if(name === '북') inst.rotation.z = Math.PI/2;
+        
+        dollGroup.add(body, head, inst);
+        dollGroup.position.set(x, 0.5, z);
+        group.add(dollGroup);
+        return dollGroup;
+    };
+
+    const dollBell = createDollWithInstrument('종', 9, -2.5, '#f1c40f');
+    const dollDrum = createDollWithInstrument('북', 9, 0, '#e67e22');
+    const dollGong = createDollWithInstrument('징', 9, 2.5, '#d35400');
+
+    scene.add(group);
+
+    // 7. 조선 배경 (멀리 블러처리된 집들)
+    const createVillage = () => {
+        const vGroup = new THREE.Group();
+        const hGeo = new THREE.BoxGeometry(3, 2, 4);
+        const hMat = new THREE.MeshStandardMaterial({ color: '#57606f' });
+        for(let i=0; i<40; i++) {
+            const h = new THREE.Mesh(hGeo, hMat);
+            const ang = Math.random() * Math.PI * 2;
+            const dist = 30 + Math.random() * 50;
+            h.position.set(Math.cos(ang)*dist, 1, Math.sin(ang)*dist);
+            h.lookAt(0, 1, 0);
+            vGroup.add(h);
+        }
+        scene.add(vGroup);
+    };
+    createVillage();
 
     // 바닥
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({color: '#27ae60'}));
-    ground.rotation.x = -Math.PI/2;
-    ground.position.y = 0;
-    ground.receiveShadow = true;
-    scene.add(ground);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({color: '#2f3542'}));
+    floor.rotation.x = -Math.PI/2;
+    scene.add(floor);
 
-    // 5. 애니메이션 및 인터랙션
+    // 8. 인터랙션
     const slider = document.getElementById('time-slider');
     const timeDisplay = document.getElementById('current-time');
 
     slider.addEventListener('input', (e) => {
-        const val = e.target.value;
+        const val = parseInt(e.target.value);
         const h = Math.floor(val / 60);
         const m = val % 60;
         timeDisplay.innerText = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 
-        // 태양 위치 조절
-        const angle = (val / 1440) * Math.PI * 2 - Math.PI/2;
-        sunLight.position.set(Math.cos(angle)*20, Math.sin(angle)*20, 10);
+        // 해 위치 및 조명 색상
+        const sunAngle = (val / 1440) * Math.PI * 2 - Math.PI/2;
+        sunLight.position.set(Math.cos(sunAngle)*20, Math.sin(sunAngle)*20, 10);
         
-        // 시간별 배경색 변화 (포스터 스타일)
-        const skyHue = Math.sin(angle) * 0.5 + 0.5;
-        scene.background.setHSL(0.6, 0.4, skyHue * 0.5);
+        const skyHue = Math.sin(sunAngle) * 0.5 + 0.5;
+        scene.background.setHSL(0.6, 0.3, skyHue * 0.4 + 0.1);
         scene.fog.color.copy(scene.background);
 
-        // 정시(Bell), 2시간(Drum), 15분(Gong) 이벤트 트리거 예시
-        if(m === 0) triggerSequence(bell.target, '종!!');
+        // 수수호 물 차오르기 효과
+        const waterProgress = (val % 120) / 120; // 2시간마다 한 번씩 차오름 (시뮬레이션)
+        p1.water.scale.y = 0.5 + Math.sin(val*0.01)*0.2; // 일렁임
+        
+        // 타종 시점 카메라 워킹 (정시)
+        if (m === 0) {
+            triggerCinematic(dollBell);
+        }
     });
 
-    function triggerSequence(target, msg) {
-        // 1. 카메라 쇠구슬 시점
-        const originalPos = camera.position.clone();
-        const ballPos = ball.position.clone().add(new THREE.Vector3(2, 1, 2));
-        
-        // 단순 카메라 워킹 시뮬레이션 (실제 구현 시 GSAP 권장)
-        camera.position.lerp(ballPos, 0.5);
+    function triggerCinematic(targetDoll) {
+        const targetPos = targetDoll.position.clone().add(new THREE.Vector3(5, 2, 5));
+        camera.position.lerp(targetPos, 0.1);
         setTimeout(() => {
-            camera.position.lerp(originalPos, 0.1);
-            console.log(msg);
-        }, 1000);
+            camera.position.set(18, 12, 22); // 복귀
+        }, 2000);
     }
 
     function animate() {
